@@ -1,0 +1,18 @@
+.conversation-row{position:relative;display:flex;align-items:center;border-radius:9px;flex-shrink:0}
+.conversation-row .conversation-item{flex:1;min-width:0;padding-right:35px;margin:0}
+.conversation-row .conversation-more{position:absolute;right:5px;top:11px;opacity:0;background:#f3f5fc;border-radius:5px;padding:4px}
+.conversation-row:hover .conversation-more,.conversation-row:focus-within .conversation-more{opacity:1}
+.conversation-row:has(.selected){background:#edf1fb}
+.conversation-row .conversation-item small{display:flex;align-items:center;gap:4px}
+.conversation-menu{position:fixed;z-index:100;background:#fff;border:1px solid #e2e7f2;border-radius:12px;box-shadow:0 12px 40px #263b6526;padding:7px;width:226px;max-height:calc(100vh - 16px);overflow:auto;color:#4c586c}
+.conversation-menu-title{padding:8px 10px;font-size:11px;color:#929db0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.conversation-menu button{width:100%;display:flex;justify-content:flex-start;align-items:center;gap:11px;text-align:left;padding:10px;border-radius:7px;font-size:12px;color:#4c586c}
+.conversation-menu button:hover,.conversation-menu button:focus-visible{outline:none;background:#eef2ff;color:#4e65d0}
+.conversation-menu [role=separator]{height:1px;background:#edf0f6;margin:5px 6px}
+.conversation-menu .menu-danger{color:#cc515a}.conversation-menu .menu-danger:hover,.conversation-menu .menu-danger:focus-visible{background:#fff0f1;color:#bb3944}
+.conversation-action-form .action-target{font-size:14px;overflow-wrap:anywhere}
+.conversation-action-form .delete-confirm{background:#c74953;border-color:#c74953}
+.conversation-action-form .share-notes{flex-direction:row;align-items:center;gap:8px}.conversation-action-form .share-notes input{width:auto}
+.share-preview{max-height:43vh;overflow:auto;border:1px solid #e5eaf4;border-radius:9px;padding:18px;background:#fcfdff}
+.action-error{font-size:11px;line-height:1.7;color:#b23d49;padding:8px;overflow-wrap:anywhere}
+@media(hover:none){.conversation-row .conversation-more{opacity:1}}

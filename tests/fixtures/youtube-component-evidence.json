@@ -1,0 +1,25 @@
+{
+  "checkedAt": "2026-10-08",
+  "page": "https://www.youtube.com/watch?v=subu-xHrp1w",
+  "publicBundle": "https://www.youtube.com/s/_/ytmainappweb/_/js/k=ytmainappweb.kevlar_base.en_US.q4zxEzgOMq0.es5.O/am=AAAAAAEAEICU/d=1/rs=AGKMywG-nvG_SOMVOAEeG25JFLKZmmqYNg/m=kevlar_base_module,kevlar_main_module,kevlar_base_sync_mod_chunk",
+  "sha256": "60de98b354f64e655998bec71a43753bced74e25a48b9e695a1f90eeef0c7404",
+  "observedNames": {
+    "panel": "ytd-engagement-panel-section-list-renderer",
+    "panelIds": [
+      "engagement-panel-youchat",
+      "PAyouchat"
+    ],
+    "user": "yt-chat-user-turn-view-model",
+    "userText": "ytChatUserTurnViewModelTextContainer",
+    "assistant": [
+      "you-chat-item-view-model",
+      "yt-chat-item-view-model"
+    ],
+    "answer": "markdown-div",
+    "answerClass": "ytwMarkdownDivHost",
+    "messageId": "data-target-id",
+    "input": "yt-chat-input-view-model",
+    "loading": "yt-chat-loading-view-model"
+  },
+  "scope": "Public frontend definitions only. The signed-in user page was not available; tests reconstruct these components and are not a live-page acceptance test."
+}

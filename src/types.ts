@@ -1,0 +1,9 @@
+export type Status = 'complete'|'streaming'|'cancelled'|'failed'|'interrupted';
+export interface Connection { id:string; name:string; provider:string; model:string; baseUrl:string; hasKey:boolean; }
+export interface ChatImage {name:string;dataUrl:string;}
+export interface HistoryImage {index:number;name:string;src:string;}
+export interface Message {historyImages?:HistoryImage[];images?:ChatImage[];webHistory?:boolean;isTranscript?:boolean;id:string;role:'user'|'assistant';content:string;createdAt:string;status:Status;replyTo?:string;connectionId?:string;connectionName?:string;provider?:string;model?:string;error?:string;phase?:string;retryOf?:string;finishReason?:string;context?:{messageId:string;role:string;content:string}[];usage?:{prompt_tokens?:number;completion_tokens?:number;total_tokens?:number};}
+export interface Conversation {pinned?:boolean;pinnedAt?:string;webChat?:{provider:string;url:string;history?:{capturedAt:string;loadedMessages:number;scope:string}};id:string;title:string;mode:'single'|'group';connectionIds:string[];messages:Message[];createdAt:string;updatedAt:string;archived:boolean;folder:string;tags:string[];sourceId?:string;source?:{product:string;urls:string[];note:string;importedAt:string};}
+export interface Excerpt {id:string;conversationId:string;messageId:string;title:string;content:string;note:string;tags:string[];createdAt:string;source:string;model:string;}
+export interface Snapshot {connections:Connection[];conversations:Conversation[];excerpts:Excerpt[];dataDirectory:string;version:string;}
+declare global { interface Window {workbench?:{call:(action:string,payload?:unknown)=>Promise<any>;subscribeImported:(callback:(id:string)=>void)=>()=>void;subscribe:(callback:(snapshot:Snapshot)=>void)=>()=>void};} }

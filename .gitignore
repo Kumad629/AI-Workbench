@@ -1,0 +1,20 @@
+node_modules/
+dist/
+playwright-report/
+test-results/
+.env
+.env.*
+*.sqlite*
+*.log
+
+local-models/
+
+# Local research, generated previews, and runtime data
+artifacts/
+download/
+*.db
+*.db-*
+*.pem
+*.key
+.DS_Store
+Thumbs.db

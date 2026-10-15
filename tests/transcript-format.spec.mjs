@@ -1,0 +1,65 @@
+import {test,expect,_electron as electron} from '@playwright/test';
+import {mkdtempSync,rmSync,mkdirSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join,resolve} from 'node:path';
+import {fileURLToPath} from 'node:url';
+const root=resolve(fileURLToPath(new URL('../',import.meta.url)));
+test('archive reading separates roles, restores tables and keeps table excerpts across restart',async()=>{
+  const dir=mkdtempSync(join(tmpdir(),'workbench-format-'));let app;
+  const table='阶段 | 时间 | 内容\n\n起步 | 1周 | Python 与小工具\n\n实践 | 2周 | Claude Code 与项目';
+  const content='我：\n学完 Python 后应该怎么继续？\n\nGrok：\n## 下一步\n\n'+table+'\n\n我：\n先从小项目开始。\n\nGrok：\n| 项目 | 说明 |\n| --- | --- |\n| 记录工具 | 第一行<br>第二行 |\n| 链接 | [参考](https://example.org/) |\n\n<script>danger()</script>';
+  try{
+    const launch=()=>electron.launch({args:[root],env:{...process.env,AI_WORKBENCH_DATA_DIR:dir}});
+    app=await launch();let page=await app.firstWindow();
+    await page.getByRole('button',{name:'保存外部对话',exact:true}).click();
+    let dialog=page.getByRole('dialog',{name:'保存外部对话'});
+    await dialog.getByLabel('标题',{exact:true}).fill('学习路径 · 排版检查');
+    await dialog.getByLabel('对话原文').fill(content);
+    await dialog.getByRole('button',{name:'保存原文'}).click();
+    await expect(page.locator('.transcript-user')).toHaveCount(2);
+    await expect(page.locator('.transcript-assistant')).toHaveCount(2);
+    await expect(page.locator('.transcript table')).toHaveCount(2);
+    await expect(page.locator('.transcript table').first().locator('th')).toHaveText(['阶段','时间','内容']);
+    await expect(page.locator('.transcript table').last().locator('br')).toHaveCount(1);
+    await expect(page.locator('.transcript script')).toHaveCount(0);
+    const user=await page.locator('.transcript-user').first().boundingBox();
+    const assistant=await page.locator('.transcript-assistant').first().boundingBox();
+    expect(user.x).toBeGreaterThan(assistant.x+30);
+    await page.getByRole('button',{name:'查看原始文本'}).click();
+    await expect(page.locator('.transcript-raw')).toHaveText(content);
+    await page.getByRole('button',{name:'返回阅读排版'}).click();
+    await page.setViewportSize({width:1024,height:740});
+    expect(await page.locator('.transcript').evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);
+    const cell=page.locator('.transcript table').first().locator('td').first();
+    await cell.evaluate(el=>{const r=document.createRange();r.selectNodeContents(el);const s=getSelection();s.removeAllRanges();s.addRange(r);});
+    // Preserve selection as an ordinary button click does, without test scrolling it away.
+    await page.getByTestId('answer-card').getByRole('button',{name:'收藏',exact:true}).click();
+    dialog=page.getByRole('dialog',{name:'保存到精选库'});
+    await expect(dialog.locator('table')).toHaveCount(1);
+    await expect(dialog.locator('th')).toHaveText(['阶段','时间','内容']);
+    await dialog.getByLabel('标题',{exact:true}).fill('完整学习表');
+    await dialog.getByRole('button',{name:'保存精选'}).click();
+    let snapshot=await page.evaluate(()=>window.workbench.call('snapshot'));
+    expect(snapshot.excerpts[0].content).toBe(table);
+    expect(snapshot.conversations[0].messages.find(m=>m.isTranscript).content).toBe(content);
+    await page.locator('.message-scroll').evaluate(el=>el.scrollTop=0);
+    mkdirSync(join(root,'artifacts'),{recursive:true});
+    await page.setViewportSize({width:1440,height:1100});
+    if(await page.getByLabel('关闭提示').isVisible())await page.getByLabel('关闭提示').click();
+    await page.locator('.transcript').screenshot({path:join(root,'artifacts/archive-format.png')});
+    await app.close();app=await launch();page=await app.firstWindow();
+    await page.getByRole('button',{name:/^精选库/}).click();
+    await expect(page.locator('.excerpt-card table')).toHaveCount(1);
+    await expect(page.locator('.excerpt-card th')).toHaveText(['阶段','时间','内容']);
+    await page.screenshot({path:join(root,'artifacts/archive-table-excerpt.png')});
+    // A legacy unlabelled capture may regain a table, but must not invent user turns.
+    await page.getByRole('button',{name:'保存外部对话',exact:true}).click();
+    dialog=page.getByRole('dialog',{name:'保存外部对话'});
+    await dialog.getByLabel('标题',{exact:true}).fill('旧记录');
+    await dialog.getByLabel('对话原文').fill('没有发言者标记的讨论。\n\n'+table);
+    await dialog.getByRole('button',{name:'保存原文'}).click();
+    await expect(page.locator('.transcript-unknown')).toHaveCount(1);
+    await expect(page.locator('.transcript-user')).toHaveCount(0);
+    await expect(page.locator('.transcript table')).toHaveCount(1);
+  }finally{if(app)await app.close().catch(()=>{});rmSync(dir,{recursive:true,force:true});}
+});

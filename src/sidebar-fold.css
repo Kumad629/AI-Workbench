@@ -1,0 +1,14 @@
+.sidebar-top{flex-shrink:0}
+.sidebar-top[hidden],.sidebar-bottom[hidden]{display:none}
+.sidebar-top .new-chat{width:100%}
+.sidebar-top-collapsed{padding-top:8px}
+.sidebar-fold{width:100%;min-height:26px;flex-shrink:0;gap:5px;padding:4px 6px;border-radius:6px;color:#97a2b6;margin:5px 0 0}
+.sidebar-fold>span{flex:1;height:1px;background:#e3e7ef}
+.sidebar-fold small{font-size:10px;font-weight:400;white-space:nowrap}
+.sidebar-fold:hover{background:#e9edf7;color:#5269be}
+.sidebar-fold:focus-visible{outline-offset:-2px}
+.sidebar-fold-bottom{margin:4px 0}
+.sidebar .sidebar-section{margin-top:8px;flex-shrink:0}
+.sidebar .search-box,.sidebar .folder-filter{flex-shrink:0}
+.sidebar .conversation-list{min-height:0}
+.sidebar .sidebar-bottom{border-top:0;flex-shrink:0;padding-top:0}

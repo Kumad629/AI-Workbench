@@ -1,0 +1,46 @@
+.yuanbao-chat{display:flex;flex-direction:column;min-height:0;flex:1;padding:28px 36px 18px;overflow:hidden}.yuanbao-heading{display:flex;justify-content:space-between;gap:20px;align-items:flex-start}.yuanbao-heading h1{font-size:23px;margin:8px 0}.yuanbao-heading p,.yuanbao-empty p{color:var(--muted,#7d89a0);line-height:1.8}.yuanbao-actions{display:flex;gap:10px;flex-wrap:wrap}.yuanbao-status{display:flex;gap:16px;padding:14px 18px;background:#fff7e7;border:1px solid #ecdcb9;border-radius:12px;font-size:13px;line-height:1.7;margin-top:16px}.yuanbao-status strong{white-space:nowrap}.yuanbao-status.connected{background:#eff8f3;border-color:#cde5d8}.yuanbao-source{font-size:11px;color:#8390a8;padding:8px 4px;overflow-wrap:anywhere}.yuanbao-messages{flex:1;overflow:auto;min-height:120px;padding:20px 8px}.yuanbao-empty{max-width:580px;margin:45px auto;text-align:center}.yuanbao-message{max-width:92%;margin:0 auto 24px 0}.yuanbao-message.user{max-width:78%;margin-left:auto;margin-right:0}.yuanbao-author{font-weight:600;font-size:13px;margin-bottom:8px}.yuanbao-author small{font-weight:400;color:#8793ad;margin-left:14px}.yuanbao-message.user .yuanbao-author{text-align:right}.yuanbao-bubble{padding:14px 20px;border:1px solid #e1e7f2;border-radius:14px;background:white;overflow:hidden}.yuanbao-message.user .yuanbao-bubble{background:#eef1ff}.yuanbao-error{color:#a85f32;font-size:13px}.yuanbao-compose{padding-top:12px;border-top:1px solid #e4e8f0}.yuanbao-compose form{border:1px solid #dce2ef;border-radius:14px;background:white;padding:14px}.yuanbao-compose textarea{width:100%;resize:vertical;border:0;background:transparent;outline:none;min-height:72px;font:inherit}.yuanbao-compose-actions,.yuanbao-foot{display:flex;align-items:center;justify-content:space-between;gap:12px}.yuanbao-compose-actions span,.yuanbao-foot small{color:#8793ad;font-size:12px}.yuanbao-foot{margin-top:9px}.yuanbao-chat .table-scroll{max-width:100%}@media(max-width:1150px){.yuanbao-chat{padding:20px}.yuanbao-heading{display:block}.yuanbao-heading .yuanbao-actions{margin-bottom:10px}}
+.yuanbao-history-status{margin:4px 0 0;color:#6d7d96;font-size:12px;line-height:1.7}
+/* Keep the reading area flexible; fold controls stay accessible at either edge. */
+.yuanbao-chat{padding:14px 24px 10px;gap:0}
+.web-chat-header{display:flex;align-items:center;gap:12px;flex-shrink:0;min-height:38px;margin-bottom:6px}
+.web-chat-header h1{font-size:19px;line-height:1.4;margin:0;min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.web-chat-badge{font-size:11px;color:#9a6a29;background:#fff7e7;border-radius:20px;padding:4px 9px;white-space:nowrap}
+.web-chat-badge.is-connected{color:#397a5d;background:#eef8f2}
+.web-chat-fold{font-size:11px;color:#7d89a0;border-radius:6px;padding:5px 7px;flex-shrink:0}
+.web-chat-fold:hover{color:#4966df;background:#eef1fb}
+.web-chat-details{flex-shrink:0;max-height:29vh;overflow:auto;padding:0 2px 8px;scrollbar-width:thin}
+.web-chat-details[hidden],.web-chat-compose-body[hidden]{display:none}
+.yuanbao-heading{display:block}.yuanbao-heading .yuanbao-actions{gap:6px;margin:0}
+.yuanbao-heading .yuanbao-actions button{font-size:11px;padding:7px 9px;min-height:30px}
+.yuanbao-status{margin-top:8px;padding:8px 12px;border-radius:9px;gap:10px;font-size:12px;line-height:1.5}
+.yuanbao-source{padding:5px 2px;font-size:10px}
+.yuanbao-history-status{font-size:11px;line-height:1.6;margin-top:2px}
+.web-chat-notice{display:flex;align-items:center;gap:8px;border-radius:7px;background:#fff8ea;padding:6px 9px;margin-bottom:7px;font-size:11px;flex-shrink:0;max-height:72px}
+.web-chat-notice>span{flex:1;min-width:0;overflow:auto;max-height:56px}
+.web-chat-notice>button{flex-shrink:0;font-size:11px}
+.yuanbao-chat>.conversation-viewport{min-height:100px}
+.yuanbao-messages{min-height:0;padding:12px 2px}
+.yuanbao-message{max-width:96%;margin-bottom:20px}
+.yuanbao-message.user{max-width:82%}
+.yuanbao-bubble{padding:12px 16px}
+.yuanbao-compose{padding-top:0;flex-shrink:0}
+.web-chat-compose-toggle{width:100%;height:22px;display:flex;gap:9px;justify-content:center;align-items:center;color:#8b97ad;font-size:10px}
+.web-chat-compose-toggle::before,.web-chat-compose-toggle::after{content:'';height:1px;background:#e9edf5;flex:1}
+.web-chat-compose-toggle:hover{color:#4966df}
+.yuanbao-compose form{padding:8px 12px;border-radius:11px}
+.yuanbao-compose textarea{display:block;min-height:42px;max-height:120px;resize:none;overflow-y:auto;line-height:1.6;padding:4px 0}
+.yuanbao-compose-actions{gap:8px}
+.yuanbao-compose-actions>.primary,.yuanbao-compose-actions>.secondary{padding:7px 12px;min-height:32px}
+.yuanbao-compose-actions span{font-size:10px}
+.yuanbao-compose .image-hint{font-size:10px;margin:3px 0 0}
+.yuanbao-compose .chat-images:empty{display:none}
+.yuanbao-compose .chat-images{max-height:106px;overflow:auto;margin:4px 0 8px}
+.yuanbao-foot{margin-top:3px;gap:8px}
+.yuanbao-foot small,.yuanbao-foot .text-button{font-size:10px}
+@media(max-width:1150px){
+ .yuanbao-chat{padding:10px 16px 8px}
+ .web-chat-header{gap:7px}.web-chat-header h1{font-size:17px}
+ .yuanbao-heading .yuanbao-actions{margin-bottom:0}
+ .yuanbao-foot small{max-width:65%;line-height:1.4}
+}
+@media(max-height:760px){.web-chat-details{max-height:24vh}.yuanbao-compose textarea{max-height:90px}.yuanbao-foot small{display:none}}
