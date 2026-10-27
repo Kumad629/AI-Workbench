@@ -19,6 +19,6 @@ export function BrowserAccounts({call,onYuanbao,onDoubao,onGrok,onChatGPT,onGemi
       <article><span className="step-number">3</span><div><h3>预览并保存对话</h3><p>在 Gemini、X 内 Grok 或 YouTube 提问栏打开你想保留的对话，点击扩展 →「加载并读取历史对话」→ 等待滚动收集 → 核对首尾消息 →「保存到 AI Workbench」。只想保存一段时，可使用「读取选中文字 / 已加载内容」。</p><p>长对话会自动分批传送并校验，保存后仍是一条记录。阅读时分页，导出包含全部原文；可以收藏、写笔记和搜索。</p></div></article>
     </div>
 
-    <div className="storage-card"><ShieldCheck size={22}/><div><h3>当前连接范围</h3><p>只读取你主动打开、点击读取的页面内容，不读取密码、Cookie 或其他标签页。扩展会自动滚动加载历史并显示消息数；网页没有提供历史总数，保存前仍需核对首尾消息。超时或中止时会标明部分记录。</p><p>YouTube 提问栏只用于保存对话。元宝 / 豆包 / X 内 Grok / ChatGPT / Gemini 支持网页聊天试用：仅向你明确连接的对应标签页发送问题并接回回答，关闭连接页可断开。元宝、豆包支持自动滚动同步；其他网页聊天先同步已加载记录，Gemini 和 Grok 原自动提取存档入口保留。网页群发尚未实现。</p><button className="text-button" onClick={async()=>{const next=await call('resetBrowserBridge');if(next){setInfo(next);setMessage('旧连接码已失效，请用新信息重新配对扩展。');}}}><RotateCcw size={13}/>重置连接码</button></div></div>
+    <div className="storage-card"><ShieldCheck size={22}/><div><h3>当前连接范围</h3><p>只读取你主动打开、点击读取的页面内容，不读取密码、Cookie 或其他标签页。扩展会自动滚动加载历史并显示消息数；网页没有提供历史总数，保存前仍需核对首尾消息。超时或中止时会标明部分记录。</p><p>YouTube 提问栏只用于保存对话。元宝 / 豆包 / X 内 Grok / ChatGPT / Gemini 支持网页聊天试用：仅向你明确连接的对应标签页发送问题并接回回答，关闭连接页可断开。元宝、豆包支持自动滚动同步；其他网页聊天先同步已加载记录，Gemini 和 Grok 原自动提取存档入口保留。元宝、豆包、ChatGPT、Gemini 可通过群聊成员面板的「添加网页账号成员」加入；每家绑定一条专用网页会话，默认不互相转交回答。</p><button className="text-button" onClick={async()=>{const next=await call('resetBrowserBridge');if(next){setInfo(next);setMessage('旧连接码已失效，请用新信息重新配对扩展。');}}}><RotateCcw size={13}/>重置连接码</button></div></div>
   </section>;
 }

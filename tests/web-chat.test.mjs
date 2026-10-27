@@ -700,3 +700,37 @@ test('ChatGPT and Gemini allow a new-chat URL promotion but refuse changing an e
  assert.throws(()=>chat.report({...auth,jobId:job.id,lease:job.lease,sequence:2,phase:'complete',content:'wrong',url:next.replace('/new','/other')}),/切换/);assert.equal(f.store.get('conversation',sent.conversationId).messages.at(-1).content,'partial');chat.cancel();
  }
 });
+
+
+test('joining establishes only a local identity for a connected page and is idempotent',t=>{const f=fixture(t);assert.equal(f.chat.status().conversationId,undefined);const id=f.chat.ensureConversation({bindingId:f.auth.bindingId});const c=f.store.get('conversation',id);assert.equal(c.webChat.url,f.url);assert.equal(c.webChat.history,undefined);assert.deepEqual(c.messages,[]);assert.equal(f.chat.status().conversationId,id);assert.equal(f.chat.ensureConversation({bindingId:f.auth.bindingId,conversationId:id}),id);assert.equal(f.store.all('conversation').length,1);assert.equal(f.store.all('webJob').length,0);});
+test('failed or empty initial history does not prevent creating a member identity or fabricate history',t=>{for(const mode of ['failed','empty']){const f=fixture(t),b=f.chat.bind({clientId:f.auth.clientId,url:f.url,ready:true,historyEnabled:true}),auth={clientId:f.auth.clientId,...b};const result=f.chat.history({...auth,requestId:f.chat.status().history.id,url:f.url,messages:[],...(mode==='failed'?{error:'FIXTURE_HISTORY_FAILED'}:{})});assert.equal(result.accepted,mode==='empty');assert.equal(f.chat.status().conversationId,undefined);const phase=f.chat.status().history.phase,id=f.chat.ensureConversation({bindingId:b.bindingId}),c=f.store.get('conversation',id);assert.deepEqual(c.messages,[]);assert.equal(c.webChat.history,undefined);assert.equal(f.chat.status().history.phase,phase);}});
+test('member identity creation rejects stale binding, wrong record, offline, draft and busy states',t=>{const f=fixture(t);assert.throws(()=>f.chat.ensureConversation({bindingId:'stale'}),/变化/);assert.throws(()=>f.chat.ensureConversation({bindingId:f.auth.bindingId,conversationId:'wrong'}),/变化/);assert.equal(f.store.all('conversation').length,0);f.chat.poll({...f.auth,url:f.url,ready:false,reason:'网页有草稿'});assert.throws(()=>f.chat.ensureConversation({bindingId:f.auth.bindingId}),/草稿/);f.chat.poll({...f.auth,url:f.url,ready:true});const busyBinding=f.chat.bind({clientId:f.auth.clientId,url:f.url,ready:true,historyEnabled:true});assert.throws(()=>f.chat.ensureConversation({bindingId:busyBinding.bindingId}),/同步/);f.chat.cancel();f.advance(16000);assert.throws(()=>f.chat.ensureConversation({bindingId:busyBinding.bindingId}),/变化/);assert.equal(f.store.all('conversation').length,0);});
+test('member identity reuses existing history unchanged and refuses archived records',t=>{const f=fixture(t),sent=f.send('preserved question'),job=f.claim();f.report(job);const original=f.store.get('conversation',sent.conversationId);assert.equal(f.chat.ensureConversation({bindingId:f.auth.bindingId,conversationId:original.id}),original.id);assert.deepEqual(f.store.get('conversation',original.id),original);f.store.put('conversation',{...original,archived:true});assert.throws(()=>f.chat.ensureConversation({bindingId:f.auth.bindingId}),/归档/);assert.equal(f.store.all('conversation').length,1);});
+
+const chatgptPreflight='无法确认当前消息位置，请复制连接诊断';
+function unsentChatgptFixture(t){
+ const dir=mkdtempSync(join(tmpdir(),'awb-gpt-unsent-')),store=new Store(dir);t.after(()=>{store.close();rmSync(dir,{recursive:true,force:true});});
+ const chat=new WebChat(store,()=>{},()=>Date.now(),'chatgpt'),url='https://chatgpt.com/c/unsent-fixture',clientId=randomUUID(),binding=chat.bind({url,clientId,ready:true,historyEnabled:true}),auth={...binding,clientId,url};
+ // Reproduce the older unreadable-history state without inventing webpage messages.
+ chat.history({...auth,requestId:chat.status().history.id,messages:[],error:'部分ChatGPT历史消息无法识别，请复制连接诊断'});
+ const attempts=[];for(const text of ['FIRST_NEVER_SENT','SECOND_NEVER_SENT']){const sent=chat.send({bindingId:auth.bindingId,text}),job=chat.poll({...auth,ready:true}).job;chat.report({...auth,jobId:job.id,lease:job.lease,sequence:1,phase:'failed',content:'',error:chatgptPreflight});attempts.push({...sent,job});}
+ const conversationId=attempts[0].conversationId,original=store.get('conversation',conversationId).messages;
+ const sync=()=>{chat.requestHistory({bindingId:auth.bindingId,conversationId});return chat.history({...auth,requestId:chat.status().history.id,messages:[{role:'user',content:'你好'},{role:'assistant',content:'真实网页已有回答'}]});};return {store,chat,auth,attempts,conversationId,original,sync};
+}
+test('ChatGPT imports real history around two proven preflight failures, keeping attempts and bookmarks without sending',t=>{
+ const f=unsentChatgptFixture(t);f.store.put('excerpt',{id:randomUUID(),conversationId:f.conversationId,messageId:f.original[1].id,content:'keep bookmark'});
+ const result=f.sync();assert.equal(result.accepted,true);assert.equal(result.added,2);assert.match(result.message,/保留 2 次未发送成功的本地尝试/);
+ const saved=f.store.get('conversation',f.conversationId);assert.equal(saved.messages.length,6);assert.deepEqual(saved.messages.slice(2),f.original);assert.equal(saved.messages[0].content,'你好');assert.equal(saved.messages[1].replyTo,saved.messages[0].id);assert.equal(f.store.all('excerpt')[0].messageId,f.original[1].id);assert.equal(f.store.all('webJob').length,2);assert.equal(f.chat.poll({...f.auth,ready:true}).job,null);
+ const ids=saved.messages.map(m=>m.id);const again=f.sync();assert.equal(again.accepted,true);assert.equal(again.added,0);assert.deepEqual(f.store.get('conversation',f.conversationId).messages.map(m=>m.id),ids);
+ const next=f.chat.send({bindingId:f.auth.bindingId,conversationId:f.conversationId,text:'NEW_EXPLICIT_QUESTION'}),job=f.chat.poll({...f.auth,ready:true}).job;assert.equal(job.id,next.jobId);assert.equal(job.text,'NEW_EXPLICIT_QUESTION');assert.equal(f.chat.poll({...f.auth,ready:true}).job,null);
+});
+test('ChatGPT preflight exclusion requires exact error, first report, text and message ownership; uncertain sends remain conflicts',t=>{
+ for(const mutation of ['missing','sequence','text','owner','provider','error','partial']){
+  const f=unsentChatgptFixture(t),first=f.attempts[0].job,j=f.store.get('webJob',first.id),c=f.store.get('conversation',f.conversationId);
+  if(mutation==='missing')f.store.remove('webJob',j.id);
+  else if(mutation==='error'){c.messages[1].error='发送状态不确定，请检查ChatGPT网页；不会自动重发';f.store.put('conversation',c);}
+  else if(mutation==='partial'){c.messages[1].content='possible generated answer';f.store.put('conversation',c);}
+  else{if(mutation==='sequence')j.sequence=2;if(mutation==='text')j.text='OTHER';if(mutation==='owner')j.messageId=c.messages[3].id;if(mutation==='provider')j.provider='gemini';f.store.put('webJob',j);}
+  const before=f.store.get('conversation',f.conversationId).messages,result=f.sync();assert.equal(result.accepted,false,mutation);assert.equal(result.code,'HISTORY_ALIGNMENT',mutation);assert.deepEqual(f.store.get('conversation',f.conversationId).messages,before,mutation);
+ }
+});

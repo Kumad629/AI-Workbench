@@ -11,6 +11,7 @@ test('archive reading separates roles, restores tables and keeps table excerpts 
   try{
     const launch=()=>electron.launch({args:[root],env:{...process.env,AI_WORKBENCH_DATA_DIR:dir}});
     app=await launch();let page=await app.firstWindow();
+    if(!await page.getByRole('button',{name:'保存外部对话',exact:true}).isVisible())await page.locator('.sidebar-more summary').click();
     await page.getByRole('button',{name:'保存外部对话',exact:true}).click();
     let dialog=page.getByRole('dialog',{name:'保存外部对话'});
     await dialog.getByLabel('标题',{exact:true}).fill('学习路径 · 排版检查');
@@ -53,6 +54,7 @@ test('archive reading separates roles, restores tables and keeps table excerpts 
     await expect(page.locator('.excerpt-card th')).toHaveText(['阶段','时间','内容']);
     await page.screenshot({path:join(root,'artifacts/archive-table-excerpt.png')});
     // A legacy unlabelled capture may regain a table, but must not invent user turns.
+    if(!await page.getByRole('button',{name:'保存外部对话',exact:true}).isVisible())await page.locator('.sidebar-more summary').click();
     await page.getByRole('button',{name:'保存外部对话',exact:true}).click();
     dialog=page.getByRole('dialog',{name:'保存外部对话'});
     await dialog.getByLabel('标题',{exact:true}).fill('旧记录');

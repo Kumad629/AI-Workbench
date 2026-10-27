@@ -9,7 +9,7 @@ const tabId=targetTabId??Number(new URL(location.href).searchParams.get('tabId')
 const clientId=crypto.randomUUID();
 let pairing,bindingId,job,sequence=0,pending=null,running=false,timer,disposed=false;
 let pageDiagnostics={};
-const connection={relayVersion:'0.12.0',runner:panel?'service-worker':'local-test',stage:'starting',pairingConfigured:false,bindingEstablished:false,desktopReachable:null,httpStatus:null,status:'正在连接…',lastError:'',failedStage:'',lastFailureAt:''};
+const connection={relayVersion:'0.12.7',runner:panel?'service-worker':'local-test',stage:'starting',pairingConfigured:false,bindingEstablished:false,desktopReachable:null,httpStatus:null,status:'正在连接…',lastError:'',failedStage:'',lastFailureAt:''};
 let historyProblem='',scanTask=null,scanProgress=null,lastPollAt=0;
 async function cancelScan(phase='cancelled',reason='scan-cancelled'){if(scanTask)try{await command({command:'history-scan-cancel',requestId:scanTask});}catch{}if(connection.scan)connection.scan={...connection.scan,phase,reason};scanTask=null;scanProgress=null;}
 const safeError=value=>String(value||'未知错误').replace(/https?:\/\/[^\s，。]+/g,'[地址]').replace(/[a-f0-9]{64}/gi,'[已隐藏]').slice(0,500);

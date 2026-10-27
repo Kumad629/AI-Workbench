@@ -54,11 +54,11 @@ test('conversation menu targets clicked row; sharing, export, pin, archive, dele
   const bounds=await page.getByRole('menu').evaluate(el=>el.getBoundingClientRect().toJSON());
   const viewport=await page.evaluate(()=>({width:innerWidth,height:innerHeight}));
   expect(bounds.x+bounds.width).toBeLessThanOrEqual(viewport.width);expect(bounds.y+bounds.height).toBeLessThanOrEqual(viewport.height);
-  await page.locator('.brand').click();await expect(page.getByRole('menu')).toHaveCount(0);
+  await page.locator('.minimal-brand').click();await expect(page.getByRole('menu')).toHaveCount(0);
   await page.getByRole('button',{name:'更多操作：我的项目',exact:true}).click();
   mkdirSync(join(root,'artifacts'),{recursive:true});await page.screenshot({path:join(root,'artifacts/conversation-menu.png')});
   await page.getByRole('menuitem',{name:'归档会话',exact:true}).click();await expect(row('我的项目')).toHaveCount(0);
-  await page.getByRole('button',{name:'已归档',exact:true}).click();await expect(row('我的项目')).toBeVisible();
+  await page.locator('.sidebar-more summary').click();await page.getByRole('button',{name:'已归档',exact:true}).click();await expect(row('我的项目')).toBeVisible();
   await open('我的项目');await page.getByRole('menuitem',{name:'恢复会话',exact:true}).click();await expect(row('我的项目')).toHaveCount(0);
   await restoreClipboard();await app.close();app=await launch();page=await app.firstWindow();await saveClipboard();
   await expect(page.locator('.conversation-item').first()).toContainText('我的项目');await expect(row('我的项目').getByLabel('已置顶')).toBeVisible();

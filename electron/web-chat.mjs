@@ -1,5 +1,7 @@
+import {MAX_PROMPT_CHARACTERS} from '../shared/chat-limits.js';
 import {validateImages} from './images.mjs';
 import {mergeWebHistory} from './web-history.mjs';
+import {historyJobsWithReceiverEvidence} from './web-recovery.mjs';
 import {randomUUID} from 'node:crypto';
 import {webChatSource,webProviders} from '../browser-extension/web-providers.js';
 export const yuanbaoUrl=value=>webChatSource(value,'yuanbao').url;
@@ -77,7 +79,7 @@ export class WebChat {
     if(!b||b.id!==bindingId||!status.online||!status.ready)throw new Error(status.reason||`请先连接可用的${this.name}网页`);
     if(this.active()||b.history?.phase==='loading')throw new Error('请等待当前回答或历史同步结束');
     const images=validateImages(inputImages);if(images.length&&!b.imageEnabled)throw new Error(['yuanbao','doubao'].includes(this.provider)?'图片发送需要更新扩展至 0.9.0 并重新连接网页':this.name+' 当前仅支持文字提问，请在原网页发送图片');if(images.length&&typeof text==='string'&&!text.trim())text='请查看图片。';
-    if(typeof text!=='string'||!text.trim()||text.length>20000)throw new Error('请输入问题（最多 20000 字符）');
+    if(typeof text!=='string'||!text.trim()||text.length>MAX_PROMPT_CHARACTERS)throw new Error('请输入问题（含文件和引用最多 100,000 字符）');
     let c=conversationId?this.store.get('conversation',conversationId):null;
     if(!c&&b.conversationId)c=this.store.get('conversation',b.conversationId);
     if(c&&(!c.webChat||c.webChat.url!==b.url||c.archived))throw new Error(`此记录与当前${this.name}页面不同，请打开对应网页后重新连接`);
@@ -89,6 +91,22 @@ export class WebChat {
     const j={provider:this.provider,id:randomUUID(),lease:randomUUID(),bindingId:b.id,clientId:b.clientId,conversationId:c.id,messageId:answer.id,text:user.content,images,state:'queued',created:this.clock(),touched:this.clock(),sequence:0};
     this.store.transaction(()=>{this.store.put('conversation',c);this.store.put('webJob',j);});this.notify();
     return {conversationId:c.id,jobId:j.id};
+  }
+  ensureConversation({bindingId,conversationId}={}){
+    const status=this.status(),b=this.binding;
+    if(!b||b.id!==bindingId||!status.online)throw new Error('网页连接已变化，请重新打开成员列表后重试');
+    if(!status.ready)throw new Error(status.reason||'网页输入区尚未就绪');
+    if(status.busy)throw new Error(b.history?.phase==='loading'?'网页历史仍在同步，请等待完成':'网页仍在回答，请等待完成');
+    if(conversationId&&conversationId!==b.conversationId)throw new Error('专用网页会话已变化，请刷新成员列表后重试');
+    let c=b.conversationId?this.store.get('conversation',b.conversationId):this.store.all('conversation').find(c=>c.webChat?.url===b.url&&!c.archived);
+    if(c&&(c.archived||c.webChat?.url!==b.url))throw new Error('专用网页会话已归档或与当前网页不符，请重新连接');
+    if(!c){
+      const now=new Date().toISOString();
+      c={id:randomUUID(),title:this.name+' · 专用网页会话',mode:'single',connectionIds:[],messages:[],createdAt:now,updatedAt:now,archived:false,folder:this.name+'网页聊天',tags:[],webChat:{provider:this.name,url:b.url}};
+      // Establish identity only. Missing/failed history is neither invented nor marked synced.
+      this.store.put('conversation',c);
+    }
+    b.conversationId=c.id;this.notify();return c.id;
   }
   requestHistory({bindingId,conversationId,mode,scan=false}){
     const status=this.status(),b=this.binding;
@@ -117,7 +135,7 @@ export class WebChat {
       let c=b.conversationId?this.store.get('conversation',b.conversationId):null;
       if(c&&(c.webChat?.url!==b.url||c.archived))throw new Error('本地记录与网页不匹配');
       if(b.history.copy)c=null;
-      const jobs=c?this.store.all('webJob').filter(j=>j.conversationId===c.id):[];
+      const jobs=c?historyJobsWithReceiverEvidence(this.store,c,this.provider,this.name):[];
       const merged=mergeWebHistory(c?.messages||[],data.messages,{id:this.provider,name:this.name},jobs);
       if(!merged.messages.length){b.history.phase='complete';b.history.message='当前网页没有可读取的历史，可以开始新对话';return {accepted:true};}
       const scanReasons={'boundaries-checked':'已自动滚动检查页面顶部和底部；页面未提供历史总数，无法保证完整','time-limit':'自动扫描达到 15 分钟时限，当前仅为部分记录','capacity':'自动扫描达到 1000 条 / 40 万字符容量，当前仅为部分记录'};

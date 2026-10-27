@@ -15,6 +15,7 @@ test('Markdown blocks preview tables, toggle source, copy exact text and preserv
     await app.evaluate(async({clipboard,ClipboardItem})=>{
       globalThis.savedClipboard=await Promise.all((await clipboard.read()).map(async item=>new ClipboardItem(Object.fromEntries(await Promise.all(item.types.map(async type=>[type,await item.getType(type)]))))));
     });
+    if(!await page.getByRole('button',{name:'保存外部对话',exact:true}).isVisible())await page.locator('.sidebar-more summary').click();
     await page.getByRole('button',{name:'保存外部对话',exact:true}).click();
     let dialog=page.getByRole('dialog',{name:'保存外部对话'});
     await dialog.getByLabel('标题',{exact:true}).fill('Markdown 阅读与复制');

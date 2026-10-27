@@ -18,3 +18,7 @@ download/
 *.key
 .DS_Store
 Thumbs.db
+
+/tmp/
+
+/exam-review/

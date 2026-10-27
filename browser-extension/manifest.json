@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "AI Workbench · 网页对话助手",
-  "version": "0.12.0",
+  "version": "0.12.7",
   "description": "保存 Gemini、X 内 Grok 和 YouTube 提问记录；使用已登录的元宝、豆包、Grok、ChatGPT、Gemini 网页聊天。",
   "permissions": [
     "activeTab",

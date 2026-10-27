@@ -1,3 +1,4 @@
+import {MAX_PROMPT_CHARACTERS} from '../shared/chat-limits.js';
 import {validateImages} from './images.mjs';
 import {validateHistoryImages} from './history-images.mjs';
 import { randomUUID } from 'node:crypto';
@@ -35,7 +36,7 @@ export function markdownExport(conversation,excerpts=[],{includeNotes=true}={}) 
   for(const m of exportMessages) {
     lines.push('## '+(m.role==='user'?'我':m.connectionName+' · '+m.model),'',m.content||'（无回答内容）','');
     for(const [i,image]of (m.images||[]).entries())lines.push('![图片 '+(i+1)+']('+image.dataUrl+')','');
-    if(m.role==='assistant') lines.push('> 状态：'+m.status+' · 来源：'+m.provider+(m.isTranscript?' / 原文存档 · ':conversation.webChat?' / 网页账号 · ':' / API · ')+m.createdAt,'');
+    if(m.role==='assistant') lines.push('> 状态：'+m.status+' · 来源：'+m.provider+(m.isTranscript?' / 原文存档 · ':conversation.webChat||m.webAccount?' / 网页账号 · ':' / API · ')+m.createdAt,'');
   }
   if(includeNotes&&excerpts.length) { lines.push('## 精选与笔记',''); for(const e of excerpts) lines.push('### '+e.title,'',e.content,'','标签：'+e.tags.join('、'),'','笔记：'+e.note,''); }
   return lines.join('\n');
@@ -59,6 +60,7 @@ export class Engine {
   changed() { this.notify(); }
   saveConnection(input) {
     const existing=input.id?this.store.get('connection',input.id):null;
+    if(existing?.kind==='web')throw new Error('网页成员请从网页账号入口重新绑定');
     if(existing && [...this.running.values()].some(r=>r.connectionId===existing.id)) throw new Error('请等待该连接的回答结束后再修改设置');
     const connection={id:existing?.id||id(),name:required(input.name,80),provider:required(input.provider,80),baseUrl:validateEndpoint(required(input.baseUrl,2000)),model:required(input.model,150),createdAt:existing?.createdAt||now()};
     let secret;
@@ -68,9 +70,24 @@ export class Engine {
     this.store.transaction(()=>{if(secret)this.store.setSecret(connection.id,secret);this.store.put('connection',connection);});
     this.changed(); return connection.id;
   }
+  saveWebConnection({provider,conversationId}) {
+    if(!['gemini','chatgpt','yuanbao','doubao'].includes(provider))throw new Error('请选择支持的网页平台');
+    const source=this.store.get('conversation',conversationId),platform=webChatSource(source.webChat?.url,provider);
+    if(source.archived)throw new Error('请先恢复这条网页会话');
+    const existing=this.store.all('connection').find(c=>c.kind==='web'&&c.webProvider===provider&&c.webConversationId===source.id);
+    if(existing)return existing.id;
+    const connection={id:id(),kind:'web',name:platform.name+' · 网页',provider:platform.name,model:'网页当前模型',baseUrl:'',webProvider:provider,webConversationId:source.id,webUrl:platform.url,createdAt:now()};
+    this.store.put('connection',connection);this.changed();return connection.id;
+  }
   deleteConnection({id:connectionId}) {
     if([...this.running.values()].some(r=>r.connectionId===connectionId)) throw new Error('请先停止该连接的回答');
-    this.store.transaction(()=>{this.store.remove('connection',connectionId);this.store.removeSecret(connectionId);});
+    this.store.transaction(()=>{
+      for(const conversation of this.store.all('conversation'))if(conversation.connectionIds?.includes(connectionId)){
+        conversation.connectionIds=conversation.connectionIds.filter(id=>id!==connectionId);
+        this.store.put('conversation',conversation);
+      }
+      this.store.remove('connection',connectionId);this.store.removeSecret(connectionId);
+    });
     this.changed();
   }
   async testConnection({id:connectionId}) {
@@ -132,7 +149,7 @@ export class Engine {
     const c=this.store.get('conversation',input.conversationId);
     if(c.archived) throw new Error('请先恢复已归档会话');
     if([...this.running.values()].some(r=>r.conversationId===c.id)) throw new Error('请等待本轮结束，或先停止回答');
-    let text=required(input.content,100000);
+    let text=required(input.content,MAX_PROMPT_CHARACTERS);
     let targets=Array.isArray(input.targetIds)&&input.targetIds.length?input.targetIds:c.connectionIds;
     targets=[...new Set(targets)];
     if(!targets.length||targets.length>8)throw new Error('请选择 1 至 8 个模型连接');
@@ -146,14 +163,15 @@ export class Engine {
       if(!quote)throw new Error('引用的消息不存在');
       text='引用 '+(quote.connectionName||'我')+' 的回答：\n'+quote.content+'\n\n我的问题：\n'+text;
     }
+    if(text.length>MAX_PROMPT_CHARACTERS)throw new Error('问题、文件、链接资料和引用合计超过 100,000 字符，请减少内容后发送');
     const user={id:id(),role:'user',content:text,createdAt:now(),status:'complete',targetIds:targets.length===c.connectionIds.length?[]:targets};
     c.messages.push(user);
-    if(c.title==='新对话')c.title=required(input.content,100000).slice(0,32);
+    if(c.title==='新对话')c.title=required(input.content,MAX_PROMPT_CHARACTERS).slice(0,32);
     const replies=targets.map(cid=>{
       const conn=this.store.get('connection',cid);
-      const context=buildContext(c,cid,user.id,input.history!==false);
+      const context=conn.kind==='web'?[{messageId:user.id,role:'user',content:user.content}]:buildContext(c,cid,user.id,input.history!==false);
       if(context.reduce((n,m)=>n+m.content.length,0)>400000)throw new Error('历史内容较长，请关闭携带历史或从选定消息建立分支');
-      return {id:id(),role:'assistant',content:'',createdAt:now(),status:'streaming',replyTo:user.id,connectionId:cid,connectionName:conn.name,provider:conn.provider,model:conn.model,context};
+      return {id:id(),role:'assistant',content:'',createdAt:now(),status:'streaming',replyTo:user.id,connectionId:cid,connectionName:conn.name,provider:conn.provider,model:conn.model,context,...(conn.kind==='web'?{webAccount:true,webUrl:conn.webUrl}:{})};
     });
     c.messages.push(...replies);c.updatedAt=now();this.store.put('conversation',c);
     for(const reply of replies)this.launch(c.id,reply);
@@ -173,14 +191,23 @@ export class Engine {
     };
     try {
       const conn=this.store.get('connection',message.connectionId);
-      const key=this.vault.decrypt(this.store.secret(conn.id));
-      await this.transport(conn,key,message.context.map(({role,content})=>({role,content})),AbortSignal.any([controller.signal,AbortSignal.timeout(180000)]),event=>{
+      const receive=event=>{
+        if(typeof event.content==='string')message.content=event.content;
+        if(event.webJobId){message.webJobId=event.webJobId;message.webSourceMessageId=event.webSourceMessageId;}
+        if(event.phase)message.phase=event.phase;
         if(event.delta)message.content+=event.delta;
         if(event.usage)message.usage=event.usage;
         if(event.reasoning)message.phase='思考中';
         if(event.finishReason)message.finishReason=event.finishReason;
         if(Date.now()-lastWrite>90) {persist();lastWrite=Date.now();}
-      });
+      };
+      if(conn.kind==='web'){
+        if(!this.webTransport)throw new Error('网页成员服务未就绪，请重启工作台');
+        await this.webTransport.run(conn,message.context.at(-1).content,AbortSignal.any([controller.signal,AbortSignal.timeout(720000)]),receive,{conversationId});
+      }else{
+      const key=this.vault.decrypt(this.store.secret(conn.id));
+      await this.transport(conn,key,message.context.map(({role,content})=>({role,content})),AbortSignal.any([controller.signal,AbortSignal.timeout(180000)]),receive);
+      }
       if(controller.signal.aborted) message.status='cancelled';
       else if(!message.content)throw new Error('服务没有返回文本回答，请检查模型设置');
       else message.status='complete';
@@ -246,7 +273,7 @@ export class Engine {
     if(mapping.size!==source.messages.length)throw new Error('文件包含重复消息 ID');
     c.messages=source.messages.map(m=>{
       if(!['user','assistant'].includes(m.role))throw new Error('文件包含不支持的消息类型');
-      return {id:mapping.get(m.id),role:m.role,images:validateImages(m.images),historyImages:validateHistoryImages(m.historyImages,str(m.content,500000)),content:str(m.content,500000),status:m.status==='complete'?'complete':'interrupted',createdAt:str(m.createdAt||now(),80),replyTo:mapping.get(m.replyTo),connectionId:m.connectionId?'imported:'+str(m.connectionId,100):undefined,connectionName:str(m.connectionName||'导入的模型',80),provider:str(m.provider||'未知',80),model:str(m.model||'',150),isTranscript:m.isTranscript===true,webHistory:m.webHistory===true&&!!c.webChat,context:[],targetIds:[]};
+      return {id:mapping.get(m.id),role:m.role,images:validateImages(m.images),historyImages:validateHistoryImages(m.historyImages,str(m.content,500000)),content:str(m.content,500000),status:m.status==='complete'?'complete':'interrupted',createdAt:str(m.createdAt||now(),80),replyTo:mapping.get(m.replyTo),connectionId:m.connectionId?'imported:'+str(m.connectionId,100):undefined,connectionName:str(m.connectionName||'导入的模型',80),provider:str(m.provider||'未知',80),model:str(m.model||'',150),...(m.webAccount===true?{webAccount:true,webUrl:webChatSource(m.webUrl).url}:{}),isTranscript:m.isTranscript===true,webHistory:m.webHistory===true&&!!c.webChat,context:[],targetIds:[]};
     });
     if(!Array.isArray(data.excerpts||[])||(data.excerpts||[]).length>10000)throw new Error('精选内容格式不正确');
     const excerpts=(data.excerpts||[]).map(e=>{

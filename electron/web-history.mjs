@@ -1,17 +1,24 @@
 import {createHash,randomUUID} from 'node:crypto';
+import {receiverError} from './web-recovery.mjs';
 import {validateHistoryImages,enrichHistoryImages} from './history-images.mjs';
 const fingerprint=m=>createHash('sha256').update(m.role+'\0'+m.content.replace(/\r\n/g,'\n').trim()).digest('hex');
 const imageOnly=m=>m?.role==='user'&&/^(?:\s*\[图片(?:：[^\]\r\n]*)?\]\s*)+$/.test(m.content);
 function turns(messages){
  const result=[];for(const m of messages){if(m.role==='user')result.push({key:fingerprint(m),messages:[m]});else if(result.length)result.at(-1).messages.push(m);else return null;}return result;
 }
-// Only this legacy upload error at the first report proves begin() was never called.
-// Require the original local job and attachment ownership; arbitrary failed turns cannot be skipped.
-function unsentUploadTurns(existing,jobs,provider){
+// Only exact pre-send failures with their first persisted report prove an unsent turn.
+// Preserve every local message; exclude only proven attempts from remote alignment.
+function confirmedUnsentTurns(existing,jobs,provider){
  const groups=turns(existing)||[];
  return groups.filter(t=>{
   if(t.messages.length!==2)return false;
   const [q,a]=t.messages;
+  // ChatGPT 0.12.2 stopped here before creating page state or touching the editor.
+  // Do not confuse this known preflight rejection with an uncertain click or lost reply.
+  if(provider.id==='chatgpt'&&!q.images?.length&&a.role==='assistant'&&a.status==='failed'&&!a.content&&
+    a.replyTo===q.id&&a.connectionId==='web:chatgpt'&&a.error==='无法确认当前消息位置，请复制连接诊断'){
+   return jobs.some(j=>j.provider==='chatgpt'&&j.messageId===a.id&&j.state==='failed'&&j.sequence===1&&j.text===q.content&&!j.images?.length);
+  }
   // This exact Grok error is emitted before click; a first failed report plus
   // the persisted job proves an unsent text attempt. Never skip uncertain sends.
   if(provider.id==='grok'&&!q.images?.length&&a.role==='assistant'&&a.status==='failed'&&!a.content&&
@@ -26,10 +33,10 @@ function unsentUploadTurns(existing,jobs,provider){
     j.text===q.content&&JSON.stringify(j.images)===JSON.stringify(q.images));
  });
 }
-function questionAlignment(existing,incoming,provider){
+function questionAlignment(existing,incoming,provider,jobs=[]){
  const a=turns(incoming),b=turns(existing);if(!a||!b||a.length<2||b.length<2)return null;
  const recoverable=(t,index)=>index===b.length-1&&t.messages.length===2&&
-   ['failed','interrupted'].includes(t.messages[1].status)&&t.messages[1].role==='assistant'&&
+   (['failed','interrupted'].includes(t.messages[1].status)||t.messages[1].status==='cancelled'&&jobs.some(j=>j.messageId===t.messages[1].id&&j.receiverTimeoutConfirmed))&&t.messages[1].role==='assistant'&&
    t.messages[1].replyTo===t.messages[0].id&&t.messages[1].connectionId==='web:'+provider.id;
  const counts=items=>{const map=new Map();for(const item of items)map.set(item.key,(map.get(item.key)||0)+1);return map;};
  const ac=counts(a),bc=counts(b),candidates=[];
@@ -79,6 +86,26 @@ function questionAlignment(existing,incoming,provider){
  return {messages,differences,recovered,imageDifferences};
 }
 
+function confirmedReceiverTail(existing,incoming,provider,jobs){
+ // Repair recorded receiver failures with an unchanged full prefix. A legacy
+ // timeout needs separate group/job evidence; user cancellations remain protected.
+ if(!['gemini','chatgpt'].includes(provider.id))return null;
+ const local=turns(existing),remote=turns(incoming);
+ if(!local||!remote||local.length<2||local.length!==remote.length)return null;
+ const last=local.at(-1),target=remote.at(-1);if(last.messages.length!==2||target.messages.length!==2)return null;
+ const [q,a]=last.messages;
+ const timeoutEvidence=jobs.some(j=>j.messageId===a.id&&j.receiverTimeoutConfirmed);
+ if(a.role!=='assistant'||!(['failed','interrupted'].includes(a.status)||a.status==='cancelled'&&timeoutEvidence)||a.replyTo!==q.id||a.connectionId!=='web:'+provider.id||target.key!==last.key||target.messages[1].role!=='assistant')return null;
+ if(!receiverError(a.error)&&!timeoutEvidence)return null;
+ if(local.filter(t=>t.key===last.key).length!==1||remote.filter(t=>t.key===last.key).length!==1)return null;
+ const evidence=jobs.filter(j=>j.provider===provider.id&&j.messageId===a.id&&(j.state==='failed'||j.state==='cancelled'&&j.receiverTimeoutConfirmed)&&j.sequence>=1&&j.text===q.content&&!j.images?.length);
+ if(evidence.length!==1)return null;
+ for(let i=0;i<local.length-1;i++){
+  const l=local[i].messages,r=remote[i].messages;
+  if(l.length!==2||r.length!==2||l.some(m=>m.status!=='complete')||l.some((m,j)=>fingerprint(m)!==fingerprint(r[j])))return null;
+ }
+ return {messages:existing.map(m=>m.id===a.id?{local:m,recovered:target.messages[1]}:{local:m}),differences:0,recovered:1,imageDifferences:0,method:'confirmed-receiver-tail'};
+}
 function imagePrefixCount(message){
  return imageOnly(message)?[...message.content.matchAll(/\[图片(?:：[^\]\r\n]*)?\]/g)].length:0;
 }
@@ -174,7 +201,7 @@ export function mergeWebHistory(existing,incoming,provider={id:'yuanbao',name:'�
   return images.length?{...m,historyImages:images}:m;
  });
  if(!incoming.length)return {messages:existing,added:0};
- const unsent=unsentUploadTurns(existing,jobs,provider);
+ const unsent=confirmedUnsentTurns(existing,jobs,provider);
  if(unsent.length){
   const skipped=new Set(unsent.flatMap(t=>t.messages.map(m=>m.id)));
   const kept=existing.filter(m=>!skipped.has(m.id));
@@ -216,7 +243,7 @@ export function mergeWebHistory(existing,incoming,provider={id:'yuanbao',name:'�
  let offset=0;
  if(b.length){
   const max=Math.max(0,...offsets.map(x=>x.overlap)),best=offsets.filter(x=>x.overlap===max);
-  const aligned=(best.length!==1||['failed','interrupted'].includes(existing.at(-1)?.status))?(questionAlignment(existing,incoming,provider)||uploadedTailAlignment(existing,incoming,provider,jobs)):null;
+  const aligned=(best.length!==1||['failed','interrupted'].includes(existing.at(-1)?.status)||jobs.some(j=>j.receiverTimeoutConfirmed))?(questionAlignment(existing,incoming,provider,jobs)||uploadedTailAlignment(existing,incoming,provider,jobs)||confirmedReceiverTail(existing,incoming,provider,jobs)):null;
   if(aligned){
    const capturedAt=new Date().toISOString(),messages=aligned.messages.map(m=>{
     if(m.recovered){

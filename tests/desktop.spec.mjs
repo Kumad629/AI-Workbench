@@ -23,6 +23,10 @@ test('desktop: group, switch, quote, collection, search and restart',async()=>{
     const launch=()=>electron.launch({args:[root],env:{...process.env,AI_WORKBENCH_DATA_DIR:dir},timeout:30000});
     app=await launch();let page=await app.firstWindow();
     await expect(page.getByRole('heading',{name:'你的问题，更多视角。'})).toBeVisible();
+    // Keep the original full-workflow test on the preserved classic layout.
+    await page.getByRole('button',{name:'切换外观',exact:true}).click();
+    await page.getByRole('dialog',{name:'工作台外观'}).getByRole('radio',{name:/^经典/}).check();
+    await page.getByRole('button',{name:'关闭弹窗',exact:true}).click();
     mkdirSync(join(root,'artifacts'),{recursive:true});
     expect(await page.locator('.message-scroll').evaluate(el=>el.scrollHeight<=el.clientHeight+2)).toBeTruthy();
     await page.screenshot({path:join(root,'artifacts/welcome.png')});

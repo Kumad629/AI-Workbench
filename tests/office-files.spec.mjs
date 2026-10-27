@@ -1,0 +1,27 @@
+import {test,expect,_electron as electron} from '@playwright/test';
+import {mkdtempSync,rmSync,mkdirSync,readFileSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join,resolve} from 'node:path';
+import {createServer} from 'node:http';
+import {fileURLToPath} from 'node:url';
+import {docxBytes,pptxBytes,spreadsheetBytes,legacyPptBytes} from './fixtures/chat-files.mjs';
+const root=resolve(fileURLToPath(new URL('../',import.meta.url)));
+let app,page,dir,server,requests,errors;
+async function start(){app=await electron.launch({args:[root],env:{...process.env,AI_WORKBENCH_DATA_DIR:dir}});page=await app.firstWindow();page.on('pageerror',e=>errors.push(e.message));await expect(page.getByRole('heading',{name:'你的问题，更多视角。'})).toBeVisible();}
+async function select(name,bytes){await page.getByLabel('选择文件',{exact:true}).setInputFiles({name,mimeType:'application/octet-stream',buffer:Buffer.from(bytes)});await expect(page.getByLabel('待发送文件')).toContainText(name);}
+test.beforeEach(async()=>{
+ dir=mkdtempSync(join(tmpdir(),'awb-office-'));requests=[];errors=[];server=createServer(async(req,res)=>{let raw='';for await(const chunk of req)raw+=chunk;requests.push(JSON.parse(raw));res.writeHead(200,{'Content-Type':'text/event-stream'});res.end('data: '+JSON.stringify({choices:[{delta:{content:'文件文字、表格已读取。'}}]})+'\n\ndata: [DONE]\n\n');});await new Promise(r=>server.listen(0,'127.0.0.1',r));await start();
+ const id=await page.evaluate(data=>window.workbench.call('saveConnection',data),{name:'文件测试',provider:'DeepSeek',model:'file-fixture',baseUrl:'http://127.0.0.1:'+server.address().port+'/v1',apiKey:'fixture-only'});await expect(page.getByLabel('顶部聊天模型')).toContainText('文件测试');await page.getByLabel('顶部聊天模型').selectOption(id);
+});
+test.afterEach(async()=>{if(app)await app.close();if(server)await new Promise(r=>server.close(r));if(dir)rmSync(dir,{recursive:true,force:true});expect(errors).toEqual([]);});
+for(const [name,make,expected] of [['研究规则.txt',()=>Buffer.from('来源必须保留；不编造缺失数据。'),'不编造缺失数据'],['季度.docx',docxBytes,'来源：公开季度报告'],['季度.xlsx',()=>spreadsheetBytes(),'12.5%'],['演示.pptx',pptxBytes,'备注：核对披露原文'],['旧文档.doc',()=>readFileSync(join(root,'tests/fixtures/word-legacy.doc')),'This is a test of reviewing'],['旧财务.xls',()=>spreadsheetBytes('xls'),'回款进度'],['旧演示.ppt',legacyPptBytes,'旧版演讲备注']])test(name+' is locally extracted, previewed and actually sent as text',async()=>{
+ await select(name,make());await page.getByRole('button',{name:'预览 '+name,exact:true}).click();const dialog=page.getByRole('dialog',{name:'预览文件 · '+name});await expect(dialog.locator('pre')).toContainText(expected);await dialog.getByRole('button',{name:'关闭弹窗',exact:true}).click();
+ await page.getByLabel('输入问题').fill('根据文件总结需要核实的内容');await page.getByRole('button',{name:'发送问题',exact:true}).click();await expect(page.locator('.answer-status.complete')).toHaveCount(1);expect(requests).toHaveLength(1);const message=requests[0].messages.at(-1).content;expect(message).toContain(expected);expect(message).toContain(name);expect(message).not.toContain('PK\u0003\u0004');expect(message).not.toContain('base64,');const c=(await page.evaluate(()=>window.workbench.call('snapshot'))).conversations[0];expect(c.messages[0].content).toBe(message);
+ if(name.endsWith('.xlsx')){const output=join(dir,'备份.json');await app.evaluate(({dialog},path)=>{dialog.showSaveDialog=async()=>({canceled:false,filePath:path});},output);await page.evaluate(id=>window.workbench.call('exportConversation',{conversationId:id,format:'json'}),c.id);expect(JSON.parse(readFileSync(output,'utf8')).conversation.messages[0].content).toBe(message);await app.close();app=null;await start();const saved=(await page.evaluate(()=>window.workbench.call('snapshot'))).conversations[0];expect(saved.messages[0].content).toBe(message);}
+});
+test('mixed files share the picker, stay local until send, reject bad batches and fit the compact composer',async()=>{
+ await page.setViewportSize({width:1024,height:740});await page.getByLabel('选择文件').setInputFiles([{name:'规则.txt',mimeType:'text/plain',buffer:Buffer.from('不要编造数据')},{name:'报告.docx',mimeType:'application/octet-stream',buffer:Buffer.from(docxBytes())},{name:'数据.xlsx',mimeType:'application/octet-stream',buffer:Buffer.from(spreadsheetBytes())},{name:'展示.pptx',mimeType:'application/octet-stream',buffer:Buffer.from(pptxBytes())}]);
+ await expect(page.locator('.md-file-card')).toHaveCount(4);expect(requests).toHaveLength(0);expect((await page.evaluate(()=>window.workbench.call('snapshot'))).conversations).toHaveLength(0);expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);await expect(page.getByRole('button',{name:'发送问题',exact:true})).toBeInViewport();
+ mkdirSync(join(root,'artifacts','chat-files'),{recursive:true});await page.screenshot({path:join(root,'artifacts','chat-files','mixed-minimal.png')});await page.getByLabel('选择文件').setInputFiles({name:'坏文档.docx',mimeType:'application/octet-stream',buffer:Buffer.from('not zip')});await expect(page.getByRole('alert')).toContainText('加密');await expect(page.locator('.md-file-card')).toHaveCount(4);
+ await page.getByRole('button',{name:'移除文件 展示.pptx'}).click();await page.getByRole('button',{name:'发送问题',exact:true}).click();await expect(page.locator('.answer-status.complete')).toHaveCount(1);const text=requests[0].messages.at(-1).content;expect(text).toContain('不要编造数据');expect(text).toContain('公开季度报告');expect(text).toContain('12.5%');expect(text).not.toContain('展示.pptx');
+});

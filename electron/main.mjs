@@ -1,8 +1,11 @@
-import { app, BrowserWindow, ipcMain, dialog, safeStorage, shell, clipboard, Menu, utilityProcess } from 'electron';
+import { app, net, BrowserWindow, ipcMain, dialog, safeStorage, shell, clipboard, Menu, utilityProcess } from 'electron';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readFile, writeFile } from 'node:fs/promises';
 import { WebChat, yuanbaoUrl, doubaoUrl, grokUrl, chatgptUrl, geminiUrl } from './web-chat.mjs';
+import {readChatFile} from './chat-files.mjs';
+import {createWebMemberTransport,mirrorRecoveredWebReplies} from './web-members.mjs';
+import {createLinkReader} from './link-reader.mjs';
 import { Store } from './store.mjs';
 import { VoiceModel } from './voice-model.mjs';
 import { VoiceService,mayUseMicrophone } from './voice-service.mjs';
@@ -46,12 +49,28 @@ else {
   });
   const notifyWeb=()=>{clearTimeout(updateTimer);updateTimer=setTimeout(()=>{if(win&&!win.isDestroyed())win.webContents.send('workbench:update',snapshot());},70);};
   const webChats={chatgpt:new WebChat(store,notifyWeb,()=>Date.now(),'chatgpt'),gemini:new WebChat(store,notifyWeb,()=>Date.now(),'gemini'),grok:new WebChat(store,notifyWeb,()=>Date.now(),'grok'),yuanbao:new WebChat(store,notifyWeb),doubao:new WebChat(store,notifyWeb,()=>Date.now(),'doubao')};
+  engine.webTransport=createWebMemberTransport({store,chats:webChats});
   const chatFor=(provider='yuanbao')=>{if(!Object.hasOwn(webChats,provider))throw new Error('未知网页平台');return webChats[provider];};
-  browserBridge.webChat=Object.fromEntries(['bind','poll','history','report'].map(method=>[method,data=>chatFor(data.provider)[method](data)]));
+  browserBridge.webChat=Object.fromEntries(['bind','poll','history','report'].map(method=>[method,data=>{const result=chatFor(data.provider)[method](data);if(method==='history'&&result.accepted)mirrorRecoveredWebReplies(store,data.provider);return result;}]));
+  const linkJobs=new Map(),readLinks=createLinkReader({fetch:(url,options)=>net.fetch(url,options)});
   const methods=new Set(['conversationShare','saveConnection','deleteConnection','testConnection','createConversation','updateConversation','send','cancel','retry','branch','saveExcerpt','deleteExcerpt','importTranscript']);
   ipcMain.handle('workbench:call',async(event,action,payload={})=>{
     if(!win||event.sender!==win.webContents||event.senderFrame!==win.webContents.mainFrame)throw new Error('不允许的调用来源');
     if(action==='snapshot')return snapshot();
+    if(action==='saveWebConnection'){
+      if(!['gemini','chatgpt','yuanbao','doubao'].includes(payload.provider))throw Error('请选择支持的网页平台');
+      const conversationId=chatFor(payload.provider).ensureConversation(payload);
+      return engine.saveWebConnection({provider:payload.provider,conversationId});
+    }
+    if(action==='webMemberStatuses')return Object.fromEntries(['chatgpt','gemini','yuanbao','doubao'].map(provider=>[provider,chatFor(provider).status()]));
+    if(action==='testConnection'&&store.get('connection',payload.id).kind==='web'){engine.webTransport.validate(store.get('connection',payload.id));return {ok:true,text:'网页输入区可用，没有发送测试消息'};}
+    if(action==='readChatFile')return readChatFile(payload);
+    if(action==='readLinks'){
+      if(typeof payload.id!=='string'||payload.id.length>80||linkJobs.has(payload.id))throw Error('链接读取任务无效');
+      const controller=new AbortController();linkJobs.set(payload.id,controller);
+      try{return await readLinks(payload,controller.signal);}finally{linkJobs.delete(payload.id);}
+    }
+    if(action==='cancelReadLinks'){linkJobs.get(payload.id)?.abort();return true;}
     if(action==='voiceArm'){if(!win.isFocused())throw new Error('请回到工作台后开始录音');voiceArmedUntil=Date.now()+15000;return true;}
     if(action==='voiceModelStatus')return voiceModel.status();
     if(action==='voiceModelDownload')return voiceModel.start();
@@ -134,7 +153,7 @@ else {
   win.once('ready-to-show',()=>win.show());
   await win.loadFile(join(root,'dist/index.html'));
   if(store.secret('browser-bridge-token'))void browserBridge.start().catch(()=>{});
-  app.on('before-quit',()=>{voiceService.cancel();void voiceModel.cancel();void browserBridge.close();for(const r of engine.running.values())r.controller.abort();});
+  app.on('before-quit',()=>{for(const job of linkJobs.values())job.abort();voiceService.cancel();void voiceModel.cancel();void browserBridge.close();for(const r of engine.running.values())r.controller.abort();});
   app.on('window-all-closed',()=>app.quit());
   }).catch(error => { console.error(error); app.quit(); });
 }

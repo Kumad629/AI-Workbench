@@ -1,6 +1,6 @@
 {
   "name": "ai-workbench",
-  "version": "0.14.0",
+  "version": "0.18.5",
   "private": true,
   "type": "module",
   "description": "A local-first, multi-model AI chat workspace",
@@ -9,18 +9,27 @@
     "dev": "vite build --watch",
     "build": "tsc --noEmit && vite build",
     "start": "electron .",
-    "test": "node --test tests/core.test.mjs tests/transfers.test.mjs tests/transcript-format.test.mjs tests/web-chat.test.mjs tests/relay-worker.test.mjs tests/voice-service.test.mjs tests/voice-activity.test.mjs",
+    "test": "node --test tests/core.test.mjs tests/web-members.test.mjs tests/link-reader.test.mjs tests/chat-files.test.mjs tests/transfers.test.mjs tests/transcript-format.test.mjs tests/web-chat.test.mjs tests/relay-worker.test.mjs tests/voice-service.test.mjs tests/voice-activity.test.mjs",
     "test:e2e": "playwright test",
     "check": "npm run build && npm test && npm run test:e2e"
   },
   "dependencies": {
+    "@mozilla/readability": "0.6.0",
+    "@xmldom/xmldom": "0.9.12",
+    "fflate": "0.8.3",
+    "ipaddr.js": "2.4.0",
+    "linkedom": "0.18.13",
     "lucide-react": "^0.577.0",
+    "pdfjs-dist": "6.4.299",
+    "ppt-codec": "2.2.23",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.1",
     "sherpa-onnx-node": "1.13.8",
-    "sherpa-onnx-win-x64": "1.13.8"
+    "sherpa-onnx-win-x64": "1.13.8",
+    "word-extractor": "1.0.4",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "devDependencies": {
     "@playwright/test": "^1.58.2",

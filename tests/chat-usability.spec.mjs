@@ -114,7 +114,7 @@ test('relay does not send after cancellation while images are uploading',async()
  },png);
  await page.route('https://image-relay.fixture/**',r=>{
   const name=new URL(r.request().url()).pathname.slice(1);
-  if(!['yuanbao.html','yuanbao-relay.js','yuanbao-adapter.js','web-relay.js','web-relay-panel.js','image-upload.js','pairing.js','popup.css'].includes(name))return r.abort();
+  if(!['yuanbao.html','yuanbao-relay.js','yuanbao-adapter.js','grok.js','web-relay.js','web-relay-panel.js','image-upload.js','pairing.js','popup.css'].includes(name))return r.abort();
   return r.fulfill({contentType:name.endsWith('.js')?'text/javascript':name.endsWith('.css')?'text/css':'text/html',body:readFileSync(join(root,'browser-extension',name),'utf8')});
  });
  await page.goto('https://image-relay.fixture/yuanbao.html?tabId=1');

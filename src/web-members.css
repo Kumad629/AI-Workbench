@@ -1,0 +1,4 @@
+.web-member-row{display:grid;grid-template-columns:74px minmax(0,1fr) auto;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--line,#e5e7eb)}.web-member-row small{font-size:12px;line-height:1.6;overflow-wrap:anywhere;opacity:.75}.web-member-row small span{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px}.web-member-row strong{font-size:13px}.web-member-row button{white-space:nowrap}
+
+.member-context-menu{width:290px;max-width:calc(100vw - 16px)}
+.member-menu-source,.member-menu-hint{padding:0 10px;font-size:12px;line-height:1.6;color:var(--muted);overflow-wrap:anywhere}
